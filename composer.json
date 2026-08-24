@@ -6,16 +6,13 @@
     "config": {
         "vendor-dir": "Packages/Libraries",
         "bin-dir": "bin",
-        "platform": {
-            "php": "8.4"
-        },
         "allow-plugins": {
             "neos/composer-plugin": true
         }
     },
     "require": {
         "neos/neos": "^8.4",
-        "php": "^8.4"
+        "php": "^8.2"
     },
     "autoload": {
         "psr-4": {
