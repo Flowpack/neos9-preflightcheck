@@ -1,0 +1,41 @@
+{
+    "name": "flowpack/neos9-preflightcheck",
+    "type": "neos-package",
+    "description": "Tools to check the upgradability to Neos 9 of your Neos 8.4 project",
+    "license": "GPL-3.0-or-later",
+    "config": {
+        "vendor-dir": "Packages/Libraries",
+        "bin-dir": "bin",
+        "platform": {
+            "php": "8.4"
+        },
+        "allow-plugins": {
+            "neos/composer-plugin": true
+        }
+    },
+    "require": {
+        "neos/neos": "^8.4",
+        "php": "^8.4"
+    },
+    "autoload": {
+        "psr-4": {
+            "Flowpack\\Neos9\\PreflightCheck\\": "Classes"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Flowpack\\Neos9\\PreflightCheck\\Tests\\": "Tests"
+        }
+    },
+    "scripts": {
+        "post-update-cmd": "Neos\\Flow\\Composer\\InstallerScripts::postUpdateAndInstall",
+        "post-install-cmd": "Neos\\Flow\\Composer\\InstallerScripts::postUpdateAndInstall",
+        "post-package-update": "Neos\\Flow\\Composer\\InstallerScripts::postPackageUpdateAndInstall",
+        "post-package-install": "Neos\\Flow\\Composer\\InstallerScripts::postPackageUpdateAndInstall",
+    },
+    "extra": {
+        "neos": {
+            "package-key": "Flowpack.Neos9.PreflightCheck"
+        }
+    }
+}
