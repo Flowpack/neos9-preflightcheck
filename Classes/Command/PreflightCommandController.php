@@ -48,12 +48,13 @@ class PreflightCommandController extends CommandController
         }
 
         $contentContexts = $this->getContentContexts();
-        $ambiguouslyTypedNodeAggregateIds = $this->findAmbiguouslyTypedNodeAggregateIds();
-        if ($ambiguouslyTypedNodeAggregateIds !== []) {
+
+        $ambiguouslyStructuredNodeAggregateIds = $this->findAmbiguouslyStructuredNodeAggregateIds();
+        if ($ambiguouslyStructuredNodeAggregateIds['differingTypes'] !== []) {
             $this->outputLine();
             $this->outputLine('Ambiguously typed node aggregates detected:');
             $this->outputLine();
-            foreach ($ambiguouslyTypedNodeAggregateIds as $nodeAggregateId) {
+            foreach ($ambiguouslyStructuredNodeAggregateIds['differingTypes'] as $nodeAggregateId) {
                 $this->outputLine($nodeAggregateId);
                 $this->output->outputTable(
                     array_filter(array_map(
@@ -103,6 +104,60 @@ class PreflightCommandController extends CommandController
             $this->outputLine();
         }
 
+        if ($ambiguouslyStructuredNodeAggregateIds['differingPaths'] !== []) {
+            $this->outputLine();
+            $this->outputLine('Ambiguously located node aggregates detected (supported when migrating to Neos 9.3, otherwise detach variants first):');
+            $this->outputLine();
+            foreach ($ambiguouslyStructuredNodeAggregateIds['differingPaths'] as $nodeAggregateId) {
+                $this->outputLine($nodeAggregateId);
+                $this->output->outputTable(
+                    array_filter(array_map(
+                        function (ContentContext $contentContext) use ($nodeAggregateId): ?array {
+                            $node = $contentContext->getNodeByIdentifier($nodeAggregateId);
+                            if (!$node) {
+                                return null;
+                            }
+                            $documentNode = null;
+                            $path = '';
+                            if ($node->getNodeType()->isOfType('Neos.Neos:Document')) {
+                                $documentNode = $node;
+                            } else {
+                                $parent = $node->getParent();
+                                while ($parent) {
+                                    if ($parent->getNodeType()->isOfType('Neos.Neos:Document')) {
+                                        $documentNode = $parent;
+                                        break;
+                                    }
+                                    $path = \mb_substr($parent->getLabel(), 0, 24) . '/' . $path;
+                                    $parent = $parent->getParent();
+                                }
+                            }
+                            $label = $node->getLabel();
+                            if (\mb_strlen($label) > 40) {
+                                $label = \mb_substr($node->getLabel(), 0, 40) . '...';
+                            }
+                            return [
+                                \json_encode($contentContext->getTargetDimensions()),
+                                $label,
+                                $documentNode?->getLabel() ?: '!!! missing, (re)move the node',
+                                $path,
+                                $node->getName(),
+                            ];
+                        },
+                        $contentContexts,
+                    )),
+                    [
+                        'DSP',
+                        'Label',
+                        'Document',
+                        'Path',
+                        'Name',
+                    ]
+                );
+            }
+            $this->outputLine();
+        }
+
         $customNodeImplementations = $this->resolveCustomNodeImplementations();
         if ($customNodeImplementations !== []) {
             $this->outputLine();
@@ -140,11 +195,14 @@ class PreflightCommandController extends CommandController
     }
 
     /**
-     * @return list<string>
+     * @return array{differingTypes: list<string>, differingPaths: list<string>}
      */
-    private function findAmbiguouslyTypedNodeAggregateIds(): array
+    private function findAmbiguouslyStructuredNodeAggregateIds(): array
     {
-        $result = [];
+        $result = [
+            'differingTypes' => [],
+            'differingPaths' => [],
+        ];
 
         $query = $this->nodeDataRepository->createQuery();
         $query->setOrderings([
@@ -155,17 +213,23 @@ class PreflightCommandController extends CommandController
 
         $currentNodeTypeName = null;
         $currentId = null;
+        $currentPath = null;
         while ($records->count() > 0) {
             foreach ($records as $item) {
                 /** @var NodeData $item */
                 if ($item->getIdentifier() !== $currentId) {
                     $currentId = $item->getIdentifier();
                     $currentNodeTypeName = $item->getNodeType()->getName();
+                    $currentPath = $item->getPath();
                     continue;
                 }
 
                 if ($item->getNodeType()->getName() !== $currentNodeTypeName) {
-                    $result[$item->getIdentifier()] = $item->getIdentifier();
+                    $result['differingTypes'][$item->getIdentifier()] = $item->getIdentifier();
+                }
+
+                if ($item->getPath() !== $currentPath) {
+                    $result['differingPaths'][$item->getIdentifier()] = $item->getIdentifier();
                 }
             }
 
@@ -173,7 +237,10 @@ class PreflightCommandController extends CommandController
             $records = $query->execute();
         }
 
-        return array_values($result);
+        $result['differingTypes'] = array_values($result['differingTypes']);
+        $result['differingPaths'] = array_values($result['differingPaths']);
+
+        return $result;
     }
 
     /**
